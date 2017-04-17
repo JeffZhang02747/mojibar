@@ -1,10 +1,8 @@
 var emojilib = require('emojilib').lib
 var emojikeys = require('emojilib').ordered
+var emojiSearch = require('emoji-search')
 var clipboard = require('electron').clipboard
 var ipc = require('electron').ipcRenderer
-var index = buildIndex()
-var indexKeys = Object.keys(index)
-var emojikeyIndexTable = buildEmojikeyIndexTable()
 var searching = false
 var searchInput = document.querySelector('.js-search')
 var directions = {
@@ -13,6 +11,10 @@ var directions = {
   39: 'right',
   40: 'down'
 }
+var orderedEmojiChars = emojikeys.map( function(name) {
+  return emojilib[name]['char']
+});
+
 
 searchInput.dataset.isSearchInput = true
 searchInput.focus()
@@ -107,28 +109,13 @@ function search (query) {
   if (searching) {
     clearTimeout(searching)
   }
+
   searching = setTimeout(function () {
     var results
     if (query.length === 0 || (query.length === 1 && query.charCodeAt() <= 255)) {
-      results = emojikeys.slice(0)
+      results = orderedEmojiChars
     } else {
-      var resultsDict = {}
-      indexKeys.forEach(function matchQuery (keyword) {
-        if (stringIncludes(keyword, query)) {
-          index[keyword].forEach(function addMatchingEmoji (emoji) {
-            resultsDict[emoji] = true
-          })
-        }
-      })
-      results = Object.keys(resultsDict).sort(function sortResults (a, b) {
-        return emojikeyIndexTable[a] - emojikeyIndexTable[b]
-      })
-    }
-
-    // Put exact match first
-    if (results.indexOf(query) >= 0) {
-      results.splice(results.indexOf(query), 1)
-      results.unshift(query)
+      results = emojiSearch(query)
     }
 
     renderResults(results, document.querySelector('.js-results'))
@@ -136,11 +123,11 @@ function search (query) {
   }, 80)
 }
 
-function renderResults (emojiNameArray, containerElement) {
+function renderResults (emojiCharArray, containerElement) {
   containerElement.innerHTML = ''
   var fragment = document.createDocumentFragment()
-  emojiNameArray.forEach(function (name) {
-    var unicode = (emojilib[name]['char'] || '--')
+  emojiCharArray.forEach(function (emojiChar) {
+    var unicode = (emojiChar || '--')
     var resultElement = document.createElement('button')
     resultElement.type = 'button'
     resultElement.className = 'emoji'
@@ -151,33 +138,6 @@ function renderResults (emojiNameArray, containerElement) {
   containerElement.appendChild(fragment)
 }
 
-function buildEmojikeyIndexTable () {
-  var indexTable = {}
-  emojikeys.forEach(function (name, index) {
-    indexTable[name] = index
-  })
-  return indexTable
-}
-
-function buildIndex () {
-  var keywords = {}
-  emojikeys.forEach(function (name) {
-    var words = emojilib[name]['keywords']
-    words.push(name)
-    words.push(emojilib[name]['char'])
-    words.push(emojilib[name]['category'])
-
-    words.forEach(function (word) {
-      if (keywords[word] && keywords[word].indexOf(name) < 0) {
-        keywords[word].push(name)
-      } else if (!keywords[word]) {
-        keywords[word] = [name]
-      }
-    })
-  })
-
-  return keywords
-}
 
 function isWord (charCode) {
   return String.fromCharCode(charCode).match(/\w/)
